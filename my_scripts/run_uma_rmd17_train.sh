@@ -1,10 +1,10 @@
 #!/bin/bash --login
 #SBATCH -N 1
-#SBATCH --job-name=uma_rmd17_small_test
-#SBATCH --gres=gpu:v100:1
+#SBATCH --job-name=uma_rmd17_train_lr5e-4_weight_decay1e-6
+#SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=02:00:00
+#SBATCH --time=72:00:00
 #SBATCH -o logs/%x.%j.out
 #SBATCH -e logs/%x.%j.err
 #SBATCH --mail-type=FAIL
@@ -27,5 +27,4 @@ export WANDB_RUN_GROUP=uma_rmd17
 cd ~/fairchem || exit 1
 
 python main.py \
-  --config-path configs/uma/training_release \
-  --config-name uma_rmd17
+  -c configs/uma/training_release/uma_rmd17_train.yaml

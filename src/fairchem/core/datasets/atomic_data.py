@@ -206,6 +206,10 @@ class AtomicData:
         # self.custom_fields = {}
 
         self.validate()
+    
+    @property
+    def dataset_name(self):
+        return self.dataset
 
     @property
     def task_name(self):

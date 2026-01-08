@@ -24,6 +24,9 @@ from torch.utils.data import Dataset
 from torch_geometric.data import Data
 from typing_extensions import TypeVar, override
 
+# add
+from types import SimpleNamespace
+
 log = getLogger(__name__)
 
 
@@ -91,20 +94,97 @@ class LmdbDataset(Dataset[T], ContextDecorator):
     def data_transform(self, data: Data) -> Data:
         return data
 
-    def __init__(
-        self,
-        src: str | Path,
-        metadata_path: str | Path | None = None,
-        args: argparse.Namespace = None,
-        split_name: str = None
-    ) -> None:
+    # def __init__(
+    #     self,
+    #     src: str | Path,
+    #     metadata_path: str | Path | None = None,
+    #     args: argparse.Namespace = None,
+    #     split_name: str = None
+    # ) -> None:
+
+    #     super().__init__()
+
+    #     self.max_samples = args.number_of_samples
+
+    #     self.path = Path(src)
+    #     if not self.path.is_file():
+    #         db_paths = sorted(self.path.glob("*.lmdb"))
+    #         assert len(db_paths) > 0, f"No LMDBs found in '{self.path}'"
+    #     else:
+    #         assert self.path.suffix == ".lmdb", f"File '{self.path}' is not an LMDB"
+    #         db_paths = [self.path]
+
+    #     self.metadata_path = (
+    #         Path(metadata_path) if metadata_path else self.path / "metadata.npz"
+    #     )
+
+    #     self.keys: list[list[int]] = []
+    #     self.envs: list[lmdb.Environment] = []
+    #     # Open all the lmdb files
+    #     for db_path in db_paths:
+    #         cur_env = lmdb.open(
+    #             str(db_path.absolute()),
+    #             subdir=False,
+    #             readonly=True,
+    #             lock=False,
+    #             readahead=True,
+    #             meminit=False,
+    #             max_readers=1,
+    #         )
+    #         self.envs.append(cur_env)
+
+    #         # If "length" encoded as ascii is present, use that
+    #         length_entry = cur_env.begin().get("length".encode("ascii"))
+    #         if length_entry is not None:
+    #             num_entries = pickle.loads(length_entry)
+    #         else:
+    #             # Get the number of stores data from the number of entries
+    #             # in the LMDB
+    #             num_entries = cur_env.stat()["entries"]
+
+    #         # Append the keys (0->num_entries) as a list
+    #         self.keys.append(list(range(num_entries)))
+
+    #     keylens = [len(k) for k in self.keys]
+    #     self.keylen_cumulative: list[int] = np.cumsum(keylens).tolist()
+    #     self.num_samples = sum(keylens)
+
+        
+    #     # TODO: remove this logic in favor of DatasetSampleNConfig
+    #     if split_name == "train" and args.train_samples_limit > 0:
+    #         # self.max_samples <= self.num_samples, f"max_samples={self.max_samples} is greater than num_samples={self.num_samples}"
+    #         self.num_samples = min(args.train_samples_limit, self.num_samples)
+    #         random_state = np.random.RandomState(self.seed)
+    #         self.shuffled_indices = random_state.choice(range(self.num_samples), self.num_samples, replace=False).tolist()
+    #     elif split_name == "val":
+    #         self.num_samples = args.val_samples_limit if args.val_samples_limit > 0 else self.num_samples
+    #         self.shuffled_indices = list(range(self.num_samples))
+    #     else:
+    #         self.num_samples = args.test_samples_limit if args.test_samples_limit > 0 else self.num_samples
+    #         self.shuffled_indices = list(range(self.num_samples))
+
+    # for rmd17
+    def __init__(self, config: dict):
         super().__init__()
 
-        # self.max_samples = args.number_of_samples
+        self.config = config
+
+        # ---- args handling (FairChem-style) ----
+        args = SimpleNamespace(
+            seed=config.get("seed", 0),
+            train_samples_limit=config.get("train_samples_limit", 0),
+            val_samples_limit=config.get("val_samples_limit", 0),
+            test_samples_limit=config.get("test_samples_limit", 0),
+        )
         self.args = args
         self.seed = args.seed
 
+        split_name = config.get("split_name")
+
+        # ---- src handling (THIS WAS THE BUG) ----
+        src = config["src"]
         self.path = Path(src)
+
         if not self.path.is_file():
             db_paths = sorted(self.path.glob("*.lmdb"))
             assert len(db_paths) > 0, f"No LMDBs found in '{self.path}'"
@@ -112,13 +192,12 @@ class LmdbDataset(Dataset[T], ContextDecorator):
             assert self.path.suffix == ".lmdb", f"File '{self.path}' is not an LMDB"
             db_paths = [self.path]
 
-        self.metadata_path = (
-            Path(metadata_path) if metadata_path else self.path / "metadata.npz"
-        )
+        self.metadata_path = Path(config.get("metadata_path", self.path / "metadata.npz"))
 
-        self.keys: list[list[int]] = []
-        self.envs: list[lmdb.Environment] = []
-        # Open all the lmdb files
+        # ---- rest of your code unchanged ----
+        self.keys = []
+        self.envs = []
+
         for db_path in db_paths:
             cur_env = lmdb.open(
                 str(db_path.absolute()),
@@ -131,35 +210,48 @@ class LmdbDataset(Dataset[T], ContextDecorator):
             )
             self.envs.append(cur_env)
 
-            # If "length" encoded as ascii is present, use that
-            length_entry = cur_env.begin().get("length".encode("ascii"))
+            length_entry = cur_env.begin().get(b"length")
             if length_entry is not None:
                 num_entries = pickle.loads(length_entry)
             else:
-                # Get the number of stores data from the number of entries
-                # in the LMDB
                 num_entries = cur_env.stat()["entries"]
 
-            # Append the keys (0->num_entries) as a list
             self.keys.append(list(range(num_entries)))
 
         keylens = [len(k) for k in self.keys]
-        self.keylen_cumulative: list[int] = np.cumsum(keylens).tolist()
+        self.keylen_cumulative = np.cumsum(keylens).tolist()
         self.num_samples = sum(keylens)
 
-        
-        # TODO: remove this logic in favor of DatasetSampleNConfig
         if split_name == "train" and args.train_samples_limit > 0:
-            # self.max_samples <= self.num_samples, f"max_samples={self.max_samples} is greater than num_samples={self.num_samples}"
             self.num_samples = min(args.train_samples_limit, self.num_samples)
-            random_state = np.random.RandomState(self.seed)
-            self.shuffled_indices = random_state.choice(range(self.num_samples), self.num_samples, replace=False).tolist()
-        elif split_name == "val":
-            self.num_samples = args.val_samples_limit if args.val_samples_limit > 0 else self.num_samples
-            self.shuffled_indices = list(range(self.num_samples))
+            rng = np.random.RandomState(self.seed)
+            self.shuffled_indices = rng.permutation(self.num_samples).tolist()
         else:
-            self.num_samples = args.test_samples_limit if args.test_samples_limit > 0 else self.num_samples
-            self.shuffled_indices = list(range(self.num_samples))        
+            self.shuffled_indices = list(range(self.num_samples))
+        
+        self.indices = torch.as_tensor(self.shuffled_indices, dtype=torch.long)
+        self._metadata = self.metadata
+
+    # add get_metadata for rmd17
+    def get_metadata(self, attr, indices):
+        if attr not in self.metadata:
+            raise KeyError(f"Metadata key '{attr}' not found. Available: {list(self.metadata.keys())}")
+
+        idx = np.asarray(indices, dtype=np.int64)
+
+        vals = self.metadata[attr][idx]
+
+        # Force natoms/num_nodes to be 1D int64 (Numba-friendly)
+        if attr in ("natoms", "num_nodes"):
+            vals = np.asarray(vals)
+            vals = np.squeeze(vals)              # (N,1) -> (N,)
+            vals = vals.astype(np.int64)         # enforce integer dtype
+
+            # If single index, still return shape (1,) not (1,1)
+            if vals.ndim == 0:
+                vals = np.array([int(vals)], dtype=np.int64)
+
+        return vals
 
     def __len__(self) -> int:
         return len(self.shuffled_indices)

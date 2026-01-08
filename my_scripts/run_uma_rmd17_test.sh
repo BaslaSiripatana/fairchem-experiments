@@ -1,6 +1,6 @@
 #!/bin/bash --login
 #SBATCH -N 1
-#SBATCH --job-name=uma_rmd17_small_test
+#SBATCH --job-name=uma_rmd17_test
 #SBATCH --gres=gpu:v100:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G

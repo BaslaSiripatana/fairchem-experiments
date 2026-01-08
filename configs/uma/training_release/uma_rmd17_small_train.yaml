@@ -1,0 +1,237 @@
+defaults:
+  - _self_
+
+############################
+# JOB
+############################
+job:
+  device_type: CUDA
+  scheduler:
+    mode: LOCAL
+    ranks_per_node: 1
+    num_nodes: 1
+  debug: false
+  run_dir: ./outputs
+  run_name: uma_rmd17_small_train
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: theme4
+    project: Fairchem
+
+############################
+# TRAIN LENGTH
+############################
+epochs: 1
+steps_per_epoch: 100
+
+############################
+# SMALL-TEST CONTROL
+############################
+max_neighbors: 32
+cutoff_radius: 8
+
+############################
+# DATASETS (TWO OBJECTS)
+############################
+############################
+# DATASETS (ASE-BASED, CORRECT)
+############################
+dataset_cfg:
+  format: ase_read_multi
+  seed: 0
+  splits:
+    train:
+      src: /home/siripab/fairchem/data/rmd17_xyz/aspirin/train
+      pattern: "*.xyz"
+      ase_read_args: { index: ":" }
+      a2g_args:
+        task_name: rmd17
+        r_energy: true
+        r_forces: true
+    
+    val:
+      src: /home/siripab/fairchem/data/rmd17_xyz/aspirin/val
+      pattern: "*.xyz"
+      ase_read_args: { index: ":" }
+      a2g_args:
+        task_name: rmd17
+        r_energy: true
+        r_forces: true
+
+train_dataset:
+  _target_: fairchem.core.datasets.base_dataset.create_dataset
+  config: ${dataset_cfg}
+  split: train
+
+val_dataset:
+  _target_: fairchem.core.datasets.base_dataset.create_dataset
+  config: ${dataset_cfg}
+  split: val
+
+
+############################
+# TASKS (FULL SPEC REQUIRED BY mt_collater_adapter)
+############################
+
+tasks:
+  - name: energy
+    level: system
+    property: energy
+    datasets: ["rmd17"]
+    metrics: ["mae"]
+    train_on_free_atoms: false
+    eval_on_free_atoms: false
+    loss_fn:
+      _target_: fairchem.core.modules.loss.DDPMTLoss
+      reduction: mean          # or per_structure
+      coefficient: 1.0
+      loss_fn:
+        _target_: fairchem.core.modules.loss.MAELoss
+    head: energy
+    coefficient: 1.0
+    inference_only: false
+    element_references: null
+    normalizer:
+      _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+      mean: 0.0
+      rmsd: 1.0
+
+
+  - name: forces
+    level: atom
+    property: forces
+    datasets: ["rmd17"]
+    metrics: ["mae"]
+    train_on_free_atoms: false
+    eval_on_free_atoms: false
+    loss_fn:
+      _target_: fairchem.core.modules.loss.DDPMTLoss
+      reduction: mean          # or per_structure
+      coefficient: 1.0
+      loss_fn:
+        _target_: fairchem.core.modules.loss.MAELoss
+    head: forces
+    coefficient: 30.0
+    inference_only: false
+    element_references: null
+    normalizer:
+      _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+      mean: 0.0
+      rmsd: 1.0
+
+
+############################
+# MODEL
+############################
+heads:
+  energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  forces:
+    module: fairchem.core.models.uma.escn_md.Linear_Force_Head
+
+backbone:
+  model: escnmd_backbone
+  otf_graph: true
+
+  # architecture
+  num_layers: 4
+  hidden_channels: 512
+  sphere_channels: 128
+  lmax: 2
+  mmax: 2
+
+  # graph
+  cutoff: ${cutoff_radius}   
+  max_neighbors: ${max_neighbors}
+
+  # dataset embedding (REQUIRED for UMA)
+  use_dataset_embedding: true
+  # dataset_list: [aspirin]
+  dataset_list: [rmd17]
+
+
+############################
+# DATALOADERS (USE OFFICIAL SAMPLER)
+############################
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  num_workers: 0
+
+  batch_sampler_fn:
+    _target_: my_scripts.simple_batch_sampler.simple_batch_sampler_fn
+    _partial_: true              
+    batch_size: 4
+
+  collate_fn:
+    _target_: my_scripts.collate_atomicdata.collate_atomicdata
+    _partial_: true
+    exclude_keys: []
+
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  num_workers: 0
+
+  batch_sampler_fn:
+    _target_: my_scripts.simple_batch_sampler.simple_batch_sampler_fn
+    _partial_: true
+    batch_size: 4
+
+  collate_fn:
+    _target_: my_scripts.collate_atomicdata.collate_atomicdata
+    _partial_: true
+    exclude_keys: []
+
+############################
+# RUNNER
+############################
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+
+    model:
+      _target_: fairchem.core.models.base.HydraModel
+      _recursive_: false
+      backbone: ${backbone}
+      heads: ${heads}
+
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 8e-4
+      weight_decay: 1e-3
+
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.1
+      warmup_epochs: 0.1
+      lr_min_factor: 0.01
+      n_iters_per_epoch: ${steps_per_epoch}
+      epochs: ${epochs}
+
+    print_every: 1
+    clip_grad_norm: 100
+    bf16: true
+
+  max_epochs: ${epochs}
+  max_steps: 10
+  evaluate_every_n_steps: 5
+
+  callbacks:
+    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
+      job_config: ${job}
+
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 5000
+      max_saved_checkpoints: 5

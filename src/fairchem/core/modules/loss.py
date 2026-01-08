@@ -148,8 +148,15 @@ class DDPMTLoss(nn.Module):
 
         # Ensure torch doesn't do any unwanted broadcasting
         target = target.view(input.shape)
-        if input.numel() == mult_mask.numel():
+
+        # FIX: expand mask for vector/tensor outputs
+        if mult_mask.dim() == 1 and input.dim() > 1:
+            mult_mask = mult_mask.unsqueeze(-1).expand_as(input)
+        elif input.numel() == mult_mask.numel():
             mult_mask = mult_mask.view(input.shape)
+
+        # if input.numel() == mult_mask.numel():
+        #     mult_mask = mult_mask.view(input.shape)
 
         loss = (
             self.loss_fn(

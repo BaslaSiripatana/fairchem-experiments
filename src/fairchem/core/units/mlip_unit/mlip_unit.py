@@ -945,7 +945,25 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
 
         # create dictionary of running metrics with following schema:
         # task.name: {dataset.split: {metric: value}}}
-        datasets_to_eval = state.eval_state.dataloader.dataset.dataset_names
+        
+        # datasets_to_eval = state.eval_state.dataloader.dataset.dataset_names
+
+        ds = state.eval_state.dataloader.dataset
+        # unwrap torch.utils.data.Subset
+        if hasattr(ds, "dataset") and not hasattr(ds, "dataset_names"):
+            ds = ds.dataset
+
+        if hasattr(ds, "dataset_names"):
+            datasets_to_eval = list(ds.dataset_names)
+        else:
+            # Fallback: infer from task configs (THIS IS THE KEY FIX)
+            datasets_to_eval = sorted(
+                {d for t in self.tasks for d in getattr(t, "datasets", [])}
+            )
+            if not datasets_to_eval:
+                datasets_to_eval = ["eval"]
+
+
         self.running_metrics = {
             task.name: {
                 dataset: {metric: Metrics() for metric in task.metrics}
@@ -1039,6 +1057,12 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
                     numel = distutils.all_reduce(
                         metrics.numel, average=False, device=device
                     )
+                    
+                    # add
+                    if numel == 0:
+                        log_dict[f"val/{dataset},{task},{metric_name}"] = float("nan")
+                        continue
+
                     log_dict[f"val/{dataset},{task},{metric_name}"] = total / numel
 
         total_runtime = distutils.all_reduce(
