@@ -1,6 +1,6 @@
 #!/bin/bash --login
 #SBATCH -N 1
-#SBATCH --job-name=uma_rmd17_small_train
+#SBATCH --job-name=uma_qm9_small_train
 #SBATCH --gres=gpu:v100:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
@@ -22,9 +22,9 @@ export OMP_NUM_THREADS=8
 
 export WANDB_ENTITY=theme4
 export WANDB_PROJECT=Fairchem
-export WANDB_RUN_GROUP=uma_rmd17
+export WANDB_RUN_GROUP=uma_qm9
 
 cd ~/fairchem || exit 1
 
 python main.py \
-  -c configs/uma/training_release/uma_rmd17_small_train.yaml
+  -c configs/uma/training_release/uma_qm9_small_train.yaml
