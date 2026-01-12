@@ -781,7 +781,8 @@ class MLIPTrainEvalUnit(
                 f"Exception during training! On step {self.train_progress.num_steps_completed}"
             )
             logging.error(
-                f"Data info: {data}\ndata.dataset: {data.dataset}\n"
+                # f"Data info: {data}\ndata.dataset: {data.dataset}\n"
+                f"Data info: {data}\ndata.dataset_name: {getattr(data, 'dataset_name', 'N/A')}\n"
                 + f"data.sid: {data.sid if 'sid' in data else None}\n"
                 + f"data.natoms: {data.natoms}\n"
                 + f"data.atomic_numbers: {data.atomic_numbers}"

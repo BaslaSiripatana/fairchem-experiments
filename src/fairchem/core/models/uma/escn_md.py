@@ -382,6 +382,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             if self.use_dataset_embedding:
                 assert dataset is not None
                 dataset_emb = self.dataset_embedding(dataset)
+
+                if dataset_emb.shape[0] == 1:
+                    dataset_emb = dataset_emb.repeat(chg_emb.shape[0], 1)
+
                 return torch.nn.SiLU()(
                     self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
                 )
@@ -478,7 +482,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
             spin=data_dict["spin"],
-            dataset=data_dict.get("dataset", default=None),
+            # dataset=data_dict.get("dataset", default=None),
+            dataset=data_dict["dataset"] if "dataset" in data_dict else None,
+
         )
 
         self.set_MOLE_coefficients(

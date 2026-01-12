@@ -846,9 +846,13 @@ def atomicdata_list_to_batch(
     natoms_list, sid_list = [], []
 
     for i, data in enumerate(data_list):
-        assert (
-            data.num_graphs == 1
-        ), "data list must only contain single-graph AtomicData objects."
+        # assert (
+        #     data.num_graphs == 1
+        # ), "data list must only contain single-graph AtomicData objects."
+
+        assert getattr(data, "batch", None) is None, (
+            "atomicdata_list_to_batch expects unbatched AtomicData objects"
+        )
 
         for key in keys:
             item = data[key]

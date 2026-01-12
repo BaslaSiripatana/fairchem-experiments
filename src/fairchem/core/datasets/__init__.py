@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from .ase_datasets import AseDBDataset, AseReadDataset, AseReadMultiStructureDataset
 from .rmd17 import MD17
+from .qm9 import QM9
 from .base_dataset import create_dataset
 from .collaters.simple_collater import (
     data_list_collater,
@@ -16,6 +17,7 @@ __all__ = [
     "AseReadDataset",
     "AseReadMultiStructureDataset",
     "MD17", # add MD17
+    "QM9",  # add QM9
     "create_dataset",
     "data_list_collater",
 ]
