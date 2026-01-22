@@ -12,7 +12,7 @@ job:
     num_nodes: 1
   debug: false
   run_dir: ./outputs
-  run_name: uma_qm9_small_train
+  run_name: uma_qm9_train
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
@@ -22,7 +22,7 @@ job:
 ############################
 # TRAIN LENGTH
 ############################
-epochs: 1
+epochs: 300
 steps_per_epoch: 100
 
 ############################
@@ -121,7 +121,7 @@ train_dataloader:
   batch_sampler_fn:
     _target_: my_scripts.simple_batch_sampler.simple_batch_sampler_fn
     _partial_: true
-    batch_size: 8
+    batch_size: 128
 
   collate_fn:
     _target_: my_scripts.collate_atomicdata.collate_atomicdata
@@ -137,14 +137,12 @@ eval_dataloader:
   batch_sampler_fn:
     _target_: my_scripts.simple_batch_sampler.simple_batch_sampler_fn
     _partial_: true
-    batch_size: 8
+    batch_size: 128
 
   collate_fn:
     _target_: my_scripts.collate_atomicdata.collate_atomicdata
     _partial_: true
     exclude_keys: []
-
-
 
 
 ############################
@@ -169,7 +167,7 @@ runner:
     optimizer_fn:
       _target_: torch.optim.AdamW
       _partial_: true
-      lr: 8e-4
+      lr: 3e-4
       weight_decay: 1e-3
 
     cosine_lr_scheduler_fn:
@@ -186,7 +184,7 @@ runner:
     bf16: true
 
   max_epochs: ${epochs}
-  max_steps: 10
+  max_steps: null
   evaluate_every_n_steps: 5
 
   callbacks:

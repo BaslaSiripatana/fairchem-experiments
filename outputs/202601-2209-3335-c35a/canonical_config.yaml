@@ -1,0 +1,292 @@
+job:
+  run_name: uma_qm9_finetune
+  timestamp_id: 202601-2209-3335-c35a
+  run_dir: /home/siripab/fairchem/outputs
+  device_type: CUDA
+  debug: false
+  scheduler:
+    mode: LOCAL
+    distributed_init_method: TCP
+    ranks_per_node: 1
+    num_nodes: 1
+    num_array_jobs: 1
+    slurm:
+      mem_gb: 80
+      timeout_hr: 168
+      cpus_per_task: 8
+      partition: null
+      qos: null
+      account: null
+      additional_parameters: null
+    use_ray: false
+    ray_cluster:
+      head_gpus: 0
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: theme4
+    project: Fairchem
+  seed: 0
+  deterministic: false
+  runner_state_path: null
+  metadata:
+    commit: core:362c1602,experimental:NA
+    log_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/logs
+    checkpoint_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/checkpoints
+    results_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/results
+    config_path: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/canonical_config.yaml
+    preemption_checkpoint_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/checkpoints/preemption_state
+    cluster_name: dragon
+    array_job_num: 0
+    slurm_env:
+      job_id: null
+      raw_job_id: null
+      array_job_id: null
+      array_task_id: null
+      restart_count: null
+  graph_parallel_group_size: null
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader:
+    _target_: torch.utils.data.DataLoader
+    dataset:
+      _target_: fairchem.core.datasets.base_dataset.create_dataset
+      config:
+        format: fairchem.core.datasets.qm9.QM9
+        seed: 0
+        splits:
+          train:
+            src: /home/siripab/fairchem/data/qm9/lmdb/train
+          val:
+            src: /home/siripab/fairchem/data/qm9/lmdb/val
+      split: train
+    batch_sampler:
+      _target_: my_scripts.simple_batch_sampler.make_stateful_batch_sampler
+      dataset:
+        _target_: fairchem.core.datasets.base_dataset.create_dataset
+        config:
+          format: fairchem.core.datasets.qm9.QM9
+          seed: 0
+          splits:
+            train:
+              src: /home/siripab/fairchem/data/qm9/lmdb/train
+            val:
+              src: /home/siripab/fairchem/data/qm9/lmdb/val
+        split: train
+      batch_size: 16
+      shuffle: true
+      seed: 0
+      drop_last: false
+    num_workers: 0
+    collate_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+      tasks:
+      - name: energy
+        level: system
+        property: energy
+        datasets:
+        - qm9
+        head: energy
+        metrics:
+        - mae
+        out_spec:
+          level: system
+          property: energy
+          dim:
+          - 1
+          dtype: float
+        loss_fn:
+          _target_: fairchem.core.modules.loss.DDPMTLoss
+          reduction: mean
+          coefficient: 1.0
+          loss_fn:
+            _target_: fairchem.core.modules.loss.MAELoss
+        coefficient: 1.0
+        inference_only: false
+        train_on_free_atoms: false
+        eval_on_free_atoms: false
+        element_references: null
+        normalizer:
+          _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+          mean: 0.0
+          rmsd: 1.0
+  eval_dataloader:
+    _target_: torch.utils.data.DataLoader
+    dataset:
+      _target_: fairchem.core.datasets.base_dataset.create_dataset
+      config:
+        format: fairchem.core.datasets.qm9.QM9
+        seed: 0
+        splits:
+          train:
+            src: /home/siripab/fairchem/data/qm9/lmdb/train
+          val:
+            src: /home/siripab/fairchem/data/qm9/lmdb/val
+      split: val
+    batch_sampler:
+      _target_: my_scripts.simple_batch_sampler.make_stateful_batch_sampler
+      dataset:
+        _target_: fairchem.core.datasets.base_dataset.create_dataset
+        config:
+          format: fairchem.core.datasets.qm9.QM9
+          seed: 0
+          splits:
+            train:
+              src: /home/siripab/fairchem/data/qm9/lmdb/train
+            val:
+              src: /home/siripab/fairchem/data/qm9/lmdb/val
+        split: val
+      batch_size: 16
+      shuffle: false
+      seed: 0
+      drop_last: false
+    num_workers: 0
+    collate_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+      tasks:
+      - name: energy
+        level: system
+        property: energy
+        datasets:
+        - qm9
+        head: energy
+        metrics:
+        - mae
+        out_spec:
+          level: system
+          property: energy
+          dim:
+          - 1
+          dtype: float
+        loss_fn:
+          _target_: fairchem.core.modules.loss.DDPMTLoss
+          reduction: mean
+          coefficient: 1.0
+          loss_fn:
+            _target_: fairchem.core.modules.loss.MAELoss
+        coefficient: 1.0
+        inference_only: false
+        train_on_free_atoms: false
+        eval_on_free_atoms: false
+        element_references: null
+        normalizer:
+          _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+          mean: 0.0
+          rmsd: 1.0
+  evaluate_every_n_steps: 50
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config:
+      run_name: uma_qm9_finetune
+      timestamp_id: 202601-2209-3335-c35a
+      run_dir: /home/siripab/fairchem/outputs
+      device_type: CUDA
+      debug: false
+      scheduler:
+        mode: LOCAL
+        distributed_init_method: TCP
+        ranks_per_node: 1
+        num_nodes: 1
+        num_array_jobs: 1
+        slurm:
+          mem_gb: 80
+          timeout_hr: 168
+          cpus_per_task: 8
+          partition: null
+          qos: null
+          account: null
+          additional_parameters: null
+        use_ray: false
+        ray_cluster:
+          head_gpus: 0
+      logger:
+        _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+        _partial_: true
+        entity: theme4
+        project: Fairchem
+      seed: 0
+      deterministic: false
+      runner_state_path: null
+      metadata:
+        commit: core:362c1602,experimental:NA
+        log_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/logs
+        checkpoint_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/checkpoints
+        results_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/results
+        config_path: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/canonical_config.yaml
+        preemption_checkpoint_dir: /home/siripab/fairchem/outputs/202601-2209-3335-c35a/checkpoints/preemption_state
+        cluster_name: dragon
+        array_job_num: 0
+        slurm_env:
+          job_id: null
+          raw_job_id: null
+          array_job_id: null
+          array_task_id: null
+          restart_count: null
+      graph_parallel_group_size: null
+    tasks:
+    - name: energy
+      level: system
+      property: energy
+      datasets:
+      - qm9
+      head: energy
+      metrics:
+      - mae
+      out_spec:
+        level: system
+        property: energy
+        dim:
+        - 1
+        dtype: float
+      loss_fn:
+        _target_: fairchem.core.modules.loss.DDPMTLoss
+        reduction: mean
+        coefficient: 1.0
+        loss_fn:
+          _target_: fairchem.core.modules.loss.MAELoss
+      coefficient: 1.0
+      inference_only: false
+      train_on_free_atoms: false
+      eval_on_free_atoms: false
+      element_references: null
+      normalizer:
+        _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+        mean: 0.0
+        rmsd: 1.0
+    model:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
+      checkpoint_location: /ibex/project/c2261/checkpoints/UMA/uma_sm.pt
+      strict: false
+      overrides:
+        backbone:
+          use_dataset_embedding: true
+          otf_graph: true
+          max_neighbors: 32
+          regress_stress: false
+          always_use_pbc: false
+        pass_through_head_outputs: false
+      heads:
+        energy:
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 0.0003
+      weight_decay: 0.001
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.1
+      warmup_epochs: 0.1
+      lr_min_factor: 0.01
+      epochs: 2
+      steps: null
+    print_every: 1
+    clip_grad_norm: 100
+    bf16: true
+  max_epochs: 2
+  max_steps: null
+  callbacks:
+  - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+    checkpoint_every_n_steps: 5000
+    max_saved_checkpoints: 5

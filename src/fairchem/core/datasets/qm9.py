@@ -167,8 +167,6 @@ class QM9(LmdbDataset[T]):
 
                 data_object.y = y
 
-                data_object.batch = torch.zeros(natoms, dtype=torch.long)
-
                 yield data_object
 
 

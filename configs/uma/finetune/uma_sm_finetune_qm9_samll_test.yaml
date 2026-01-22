@@ -1,0 +1,136 @@
+defaults:
+  - data: qm9_finetune
+  - _self_
+
+############################
+# JOB
+############################
+job:
+  device_type: CUDA
+  scheduler:
+    mode: LOCAL
+    ranks_per_node: 1
+    num_nodes: 1
+  debug: false
+  run_dir: ./outputs
+  run_name: uma_qm9_finetune
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: theme4
+    project: Fairchem
+
+############################
+# TRAIN LENGTH (match working script)
+############################
+epochs: 2
+steps: null
+
+############################
+# GRAPH (match working script)
+############################
+max_neighbors: 32
+
+############################
+# OPTIM
+############################
+batch_size: 1
+lr: 3e-4
+weight_decay: 1e-3
+
+
+############################
+# DATALOADERS
+############################
+
+train_dataloader:
+  _target_: torch.utils.data.DataLoader
+  dataset: ${data.data.train_dataset}
+  batch_sampler:
+    _target_: my_scripts.simple_batch_sampler.make_stateful_batch_sampler
+    dataset: ${data.data.train_dataset}
+    batch_size: ${batch_size}
+    shuffle: true
+    seed: 0
+    drop_last: false
+  num_workers: 0
+  collate_fn:
+    _target_: my_scripts.collate_atomicdata.collate_atomicdata
+    _partial_: true
+    exclude_keys: []
+
+eval_dataloader:
+  _target_: torch.utils.data.DataLoader
+  dataset: ${data.data.val_dataset}
+  batch_sampler:
+    _target_: my_scripts.simple_batch_sampler.make_stateful_batch_sampler
+    dataset: ${data.data.val_dataset}
+    batch_size: ${batch_size}
+    shuffle: false
+    seed: 0
+    drop_last: false
+  num_workers: 0
+  collate_fn:
+    _target_: my_scripts.collate_atomicdata.collate_atomicdata
+    _partial_: true
+    exclude_keys: []
+
+
+############################
+# RUNNER
+############################
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+
+  evaluate_every_n_steps: 100000
+
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${data.tasks_list}
+
+    model:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
+      checkpoint_location: /ibex/project/c2261/checkpoints/UMA/uma_sm.pt
+      strict: false
+  
+      overrides:
+        backbone:
+          use_dataset_embedding: true
+          dataset_list: [qm9] 
+          otf_graph: true
+          max_neighbors: ${max_neighbors}
+          regress_stress: ${data.regress_stress}
+          always_use_pbc: false
+        pass_through_head_outputs: ${data.pass_through_head_outputs}
+      heads: ${data.heads}
+
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: ${lr}
+      weight_decay: ${weight_decay}
+
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.1
+      warmup_epochs: 0.1
+      lr_min_factor: 0.01
+      epochs: ${epochs}
+      steps: ${steps}
+
+    print_every: 1
+    clip_grad_norm: 100
+    bf16: true
+
+  max_epochs: null
+  max_steps: 10
+
+  callbacks:
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 5000
+      max_saved_checkpoints: 5

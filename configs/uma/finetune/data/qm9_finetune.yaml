@@ -1,0 +1,90 @@
+############################
+# DATASET (MT-CONCAT FORMAT)
+############################
+
+data:
+  # dataset_cfg:
+  #   format: fairchem.core.datasets.qm9.QM9
+  #   seed: 0
+  #   splits:
+  #     train:
+  #       src: /home/siripab/fairchem/data/qm9/lmdb/train
+  #     val:
+  #       src: /home/siripab/fairchem/data/qm9/lmdb/val
+
+  train_dataset:
+    _target_: fairchem.core.datasets.base_dataset.create_dataset
+    config:
+      format: fairchem.core.datasets.qm9.QM9
+      seed: 0
+      splits:
+        train:
+          src: /home/siripab/fairchem/data/qm9/lmdb/train
+        val:
+          src: /home/siripab/fairchem/data/qm9/lmdb/val
+    split: train
+
+  val_dataset:
+    _target_: fairchem.core.datasets.base_dataset.create_dataset
+    config:
+      format: fairchem.core.datasets.qm9.QM9
+      seed: 0
+      splits:
+        train:
+          src: /home/siripab/fairchem/data/qm9/lmdb/train
+        val:
+          src: /home/siripab/fairchem/data/qm9/lmdb/val
+    split: val
+
+
+############################
+# TASKS
+############################
+
+tasks_list:
+  - name: energy
+    level: system
+    property: energy
+    datasets: ["qm9"]
+    head: energy
+    metrics: ["mae"]
+
+    out_spec:
+      level: system
+      property: energy
+      dim: [1]
+      dtype: float
+
+    loss_fn:
+      _target_: fairchem.core.modules.loss.DDPMTLoss
+      reduction: mean
+      coefficient: 1.0
+      loss_fn:
+        _target_: fairchem.core.modules.loss.MAELoss
+
+    coefficient: 1.0
+    inference_only: false
+
+    train_on_free_atoms: false
+    eval_on_free_atoms: false
+
+    element_references: null
+    normalizer:
+      _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+      mean: 0.0
+      rmsd: 1.0
+
+############################
+# HEADS
+############################
+
+heads:
+  energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+
+############################
+# UMA FLAGS
+############################
+
+regress_stress: false
+pass_through_head_outputs: false
