@@ -18,13 +18,13 @@ conda activate fairchem
 
 export OMP_NUM_THREADS=8
 
-# export WANDB_MODE=offline
+export WANDB_MODE=offline
 
-export WANDB_ENTITY=theme4
-export WANDB_PROJECT=Fairchem
-export WANDB_RUN_GROUP=uma_qm9_finetune
+# export WANDB_ENTITY=theme4
+# export WANDB_PROJECT=Fairchem
+# export WANDB_RUN_GROUP=uma_qm9_finetune
 
 cd ~/fairchem || exit 1
 
 python main.py \
-  -c configs/uma/finetune/uma_sm_finetune_qm9.yaml
+  -c configs/uma/finetune/uma_sm_finetune_qm9_small_test.yaml

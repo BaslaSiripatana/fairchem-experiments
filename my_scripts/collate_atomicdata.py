@@ -47,9 +47,20 @@ def _set_qm9_pbc(batch):
     batch.cell = torch.eye(3, device=device).unsqueeze(0)
     return batch
 
+#---------For Finetune------------#
+def _ensure_int_charge_spin(batch):
+    if hasattr(batch, "charge"):
+        batch.charge = batch.charge.round().long()
+    if hasattr(batch, "spin"):
+        batch.spin = batch.spin.round().long()
+    return batch
+
+
 
 def collate_atomicdata(data_list, exclude_keys=None):
     data = data_list[0]
+
+    data = _ensure_int_charge_spin(data) # for finetune
 
     if getattr(data, "batch", None) is not None:
         data = _ensure_natoms(data)
@@ -59,6 +70,7 @@ def collate_atomicdata(data_list, exclude_keys=None):
         return data
 
     batch = atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
+    batch = _ensure_int_charge_spin(batch) # for finetune
     batch = _ensure_natoms(batch)
     batch = _attach_qm9_targets(batch)
     batch = _ensure_dataset_name(batch)
